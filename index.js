@@ -38,6 +38,21 @@ async function run() {
       res.send(result);
     })
 
+
+      // Get tags of all articles and set() is used to prevent duplicate tags
+    app.get('/articles/tags', async(req, res) => {
+      const allArticles = await articlesCollection.find().toArray()
+
+      // Now I do flatten all tags flatten from every article by flatmap()
+      const allTags = allArticles.flatMap(article => article.tags || [])
+
+      // Now remove duplicate tags using set() and ... for normalize tags
+      const uniqueTags = [...new Set(allTags)];
+
+      res.send(uniqueTags)
+    })
+
+
     // Specific article get by id
     app.get('/articles/:id', async (req, res) => {
       const id = req.params.id;
@@ -73,7 +88,7 @@ async function run() {
       res.send(result)
     })
 
-    // Do a patch for update like data in articles
+    // Do a patch for update < like > data in articles
     app.patch('/articles/:id', async (req, res) => {
       const id = req.params.id;
       const email = req.body.user_email;
@@ -92,6 +107,10 @@ async function run() {
       });
       res.send(result)
     })
+
+
+    // Get tags of all articles and set() is used to prevent duplicate tags
+    // This is placed at top for the hex ----error----
 
     // ----------------------------------------------------------------------------------
 
