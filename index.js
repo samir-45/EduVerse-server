@@ -33,7 +33,13 @@ async function run() {
     // Articles api----------------------------------------
     // Articles api to get all articles
     app.get('/articles', async (req, res) => {
-      const cursor = articlesCollection.find();
+      const email = req.query.email;
+      const query = {}
+      if(email){
+        query.author_email = email;
+      }
+
+      const cursor = articlesCollection.find(query);
       const result = await cursor.toArray();
       res.send(result);
     })
