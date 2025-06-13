@@ -72,6 +72,12 @@ async function run() {
       res.send(result);
     });
 
+    app.post('/articles', async(req, res) => {
+      const newArticle = req.body;
+      const result = await articlesCollection.insertOne(newArticle)
+      res.send(result)
+    })
+
 
     // Comments api----------------------------------------
     app.post('/comments', async (req, res) => {
