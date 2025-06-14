@@ -35,7 +35,7 @@ async function run() {
     app.get('/articles', async (req, res) => {
       const email = req.query.email;
       const query = {}
-      if(email){
+      if (email) {
         query.author_email = email;
       }
 
@@ -45,8 +45,8 @@ async function run() {
     })
 
 
-      // Get tags of all articles and set() is used to prevent duplicate tags
-    app.get('/articles/tags', async(req, res) => {
+    // Get tags of all articles and set() is used to prevent duplicate tags
+    app.get('/articles/tags', async (req, res) => {
       const allArticles = await articlesCollection.find().toArray()
 
       // Now I do flatten all tags flatten from every article by flatmap()
@@ -78,7 +78,7 @@ async function run() {
       res.send(result);
     });
 
-    app.post('/articles', async(req, res) => {
+    app.post('/articles', async (req, res) => {
       const newArticle = req.body;
       const result = await articlesCollection.insertOne(newArticle)
       res.send(result)
@@ -113,10 +113,31 @@ async function run() {
         return res.status(400).send({ message: 'Already Liked' });
       }
 
-      const result = await articlesCollection.updateOne(filter, {
+      const result = await articlesCollection.updateOne(filter, { 
         $inc: { likes: 1 },
         $push: { liked_users: email }
       });
+      res.send(result)
+    })
+
+    // Make a put request to update article data
+    app.put('/articles/:id', async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const options = { upsert: true };
+      const updatedArticle = req.body;
+      const updatedDocument = {
+        $set: updatedArticle
+      };
+      const result = await articlesCollection.updateOne(filter, updatedDocument, options);
+      res.send(result)
+    })
+
+    // Delete article request
+    app.delete('/articles/:id', async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) }
+      const result = await articlesCollection.deleteOne(query);
       res.send(result)
     })
 
