@@ -3,6 +3,8 @@ const express = require('express');
 const app = express();
 const cors = require('cors');
 const port = process.env.PORT || 3000;
+const admin = require("firebase-admin");
+const serviceAccount = require("./firebase-admin-key.json");
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 // Middleware
@@ -11,10 +13,6 @@ app.use(express.json())
 
 // --------------------------------------------------------------------------------------
 
-var admin = require("firebase-admin");
-
-var serviceAccount = require("./firebase-admin-key.json");
-
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
@@ -22,16 +20,24 @@ admin.initializeApp({
 
 // Custom middlewares
 
-const verifyFirebaseToken = async(req, res, next) => {
-  const authHeader = req.headers?.authorization;
-  const token = authHeader.split(' ')[1];
-  if(!token){
-    return res.status(401).send({message: 'Unuthorized access'})
+const verifyFirebaseToken = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).send({ message: 'unauthorized access' })
   }
-  const userInfo = await admin.auth().verifyIdToken(token)
-  console.log('Inside the token', userInfo)
-  req.tokenEmail = userInfo.email;
-  next()
+  // console.log('Inside authheader', authHeader)
+
+  const token = authHeader.split(' ')[1];
+
+  try {
+    const decoded = await admin.auth().verifyIdToken(token);
+    req.decoded = decoded;
+    next()
+  }
+  catch (error) {
+    return res.status(401).send({ message: 'unauthorized access' })
+  }
 }
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.d2h2whv.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -55,21 +61,24 @@ async function run() {
 
     // Articles api----------------------------------------
     // Articles api to get all articles
-    app.get('/articles', verifyFirebaseToken, async (req, res) => {
-      const email = req.query.email;
-
-      if(req.tokenEmail != email){
-        return res.status(403).send({message: 'Forbidden access'})
-      }
-
-      const query = {}
-      if (email) {
-        query.author_email = email;
-      }
-
-      const cursor = articlesCollection.find(query);
+    app.get('/articles', async (req, res) => {
+      const cursor = articlesCollection.find();
       const result = await cursor.toArray();
       res.send(result);
+    })
+
+    // Secured by jwt
+
+    app.get('/articles/myArticles/:email', verifyFirebaseToken, async (req, res) => {
+      const email = req.params.email;
+
+      if (email !== req.decoded.email) {
+        return res.status(403).massege({ massege: 'forbidden access' })
+      }
+
+      const query = { author_email: email };
+      const result = await articlesCollection.find(query).toArray()
+      res.send(result)
     })
 
 
@@ -106,8 +115,17 @@ async function run() {
       res.send(result);
     });
 
-    app.post('/articles', async (req, res) => {
+
+
+    app.post('/articles', verifyFirebaseToken, async (req, res) => {
       const newArticle = req.body;
+
+      const email = newArticle.author_email;
+
+      if (email !== req.decoded.email) {
+        return res.status(403).massege({ massege: 'forbidden access' })
+      }
+
       const result = await articlesCollection.insertOne(newArticle)
       res.send(result)
     })
@@ -141,15 +159,15 @@ async function run() {
         return res.status(400).send({ message: 'Already Liked' });
       }
 
-      const result = await articlesCollection.updateOne(filter, { 
+      const result = await articlesCollection.updateOne(filter, {
         $inc: { likes: 1 },
-        $push: { liked_users: email } 
+        $push: { liked_users: email }
       });
       res.send(result)
     })
 
     // Make a put request to update article data
-    app.put('/articles/:id', async (req, res) => { 
+    app.put('/articles/:id', async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
       const options = { upsert: true };
