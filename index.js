@@ -11,6 +11,29 @@ app.use(express.json())
 
 // --------------------------------------------------------------------------------------
 
+var admin = require("firebase-admin");
+
+var serviceAccount = require("./firebase-admin-key.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+
+
+// Custom middlewares
+
+const verifyFirebaseToken = async(req, res, next) => {
+  const authHeader = req.headers?.authorization;
+  const token = authHeader.split(' ')[1];
+  if(!token){
+    return res.status(401).send({message: 'Unuthorized access'})
+  }
+  const userInfo = await admin.auth().verifyIdToken(token)
+  console.log('Inside the token', userInfo)
+  req.tokenEmail = userInfo.email;
+  next()
+}
+
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.d2h2whv.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -32,8 +55,13 @@ async function run() {
 
     // Articles api----------------------------------------
     // Articles api to get all articles
-    app.get('/articles', async (req, res) => {
+    app.get('/articles', verifyFirebaseToken, async (req, res) => {
       const email = req.query.email;
+
+      if(req.tokenEmail != email){
+        return res.status(403).send({message: 'Forbidden access'})
+      }
+
       const query = {}
       if (email) {
         query.author_email = email;
@@ -115,13 +143,13 @@ async function run() {
 
       const result = await articlesCollection.updateOne(filter, { 
         $inc: { likes: 1 },
-        $push: { liked_users: email }
+        $push: { liked_users: email } 
       });
       res.send(result)
     })
 
     // Make a put request to update article data
-    app.put('/articles/:id', async (req, res) => {
+    app.put('/articles/:id', async (req, res) => { 
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
       const options = { upsert: true };
